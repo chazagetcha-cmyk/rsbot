@@ -337,6 +337,8 @@ class SmartWoodcutter(RSBot):
         max_bank_retries = 3
         walk_to_bank_attempts = 0
         max_walk_to_bank = 10  # max minimap clicks before giving up
+        walk_from_bank_steps = 0
+        min_walk_from_bank = 3  # must walk away at least this many times before scanning
 
         print("[BOT] Smart Woodcutter started!")
         print("[BOT] Move mouse to top-left corner to emergency-stop.")
@@ -425,6 +427,7 @@ class SmartWoodcutter(RSBot):
                         print("[BOT] Deposit done — heading back to trees.")
                         self.close_bank()
                         bank_retries = 0
+                        walk_from_bank_steps = 0
                         state = self.WALK_TO_TREES
                     else:
                         bank_retries += 1
@@ -438,26 +441,39 @@ class SmartWoodcutter(RSBot):
 
                 # ── WALK_TO_TREES ────────────────────────────────
                 elif state == self.WALK_TO_TREES:
-                    if self.find_nearest_tree():
+                    # Always walk away from the bank first — the bank
+                    # interior has brown wood that looks like trees to
+                    # the color scanner, so we can't trust on-screen
+                    # tree detection until we've moved away.
+                    if walk_from_bank_steps < min_walk_from_bank:
+                        walk_from_bank_steps += 1
+                        mm_trees = self.find_trees_on_minimap()
+                        if mm_trees:
+                            print(f"[BOT] Trees on minimap, walking... (step {walk_from_bank_steps}/{min_walk_from_bank})")
+                            self.click_minimap(*mm_trees)
+                        else:
+                            bank_mm = self.find_bank_on_minimap()
+                            if bank_mm:
+                                dx = self.mm_center[0] - bank_mm[0]
+                                dy = self.mm_center[1] - bank_mm[1]
+                                tx = int(self.mm_center[0] + dx * 0.8)
+                                ty = int(self.mm_center[1] + dy * 0.8)
+                                print(f"[BOT] Walking away from bank... (step {walk_from_bank_steps}/{min_walk_from_bank})")
+                                self.click_minimap(tx, ty)
+                            else:
+                                self.click_minimap(*self._random_minimap_point())
+                    elif self.find_nearest_tree():
                         print("[BOT] Trees in sight — resuming chopping.")
+                        walk_from_bank_steps = 0
                         state = self.FIND_TREE
                         continue
-
-                    mm_trees = self.find_trees_on_minimap()
-                    if mm_trees:
-                        print("[BOT] Trees on minimap, walking...")
-                        self.click_minimap(*mm_trees)
                     else:
-                        # Walk away from the bank icon
-                        bank_mm = self.find_bank_on_minimap()
-                        if bank_mm:
-                            dx = self.mm_center[0] - bank_mm[0]
-                            dy = self.mm_center[1] - bank_mm[1]
-                            tx = int(self.mm_center[0] + dx * 0.8)
-                            ty = int(self.mm_center[1] + dy * 0.8)
-                            print("[BOT] Walking away from bank...")
-                            self.click_minimap(tx, ty)
+                        mm_trees = self.find_trees_on_minimap()
+                        if mm_trees:
+                            print("[BOT] Trees on minimap, walking...")
+                            self.click_minimap(*mm_trees)
                         else:
+                            print("[BOT] No trees found, exploring...")
                             self.click_minimap(*self._random_minimap_point())
 
             except pyautogui.FailSafeException:
