@@ -231,9 +231,9 @@ class SmartWoodcutter(RSBot):
         y = self.inv_origin[1] + row * self.inv_slot_h
         return (x, y)
 
-    def is_inventory_full(self):
-        """True when the last (28th) inventory slot contains an item."""
-        sx, sy = self._inv_slot_center(self.inv_cols - 1, self.inv_rows - 1)
+    def _is_slot_occupied(self, col, row):
+        """True when the given inventory slot contains an item."""
+        sx, sy = self._inv_slot_center(col, row)
         pad = 5
         sample = self._grab_region((sx - pad, sy - pad, sx + pad, sy + pad))
         avg = sample.mean(axis=(0, 1))
@@ -241,6 +241,18 @@ class SmartWoodcutter(RSBot):
         er, eg, eb = self.inv_empty_color
         diff = abs(avg[0] - er) + abs(avg[1] - eg) + abs(avg[2] - eb)
         return diff > 30
+
+    def is_inventory_full(self):
+        """True when the last few inventory slots all contain items."""
+        # Check last 3 slots to reduce false positives from a single bad sample
+        last_row = self.inv_rows - 1
+        slots_to_check = [
+            (self.inv_cols - 1, last_row),   # slot 28
+            (self.inv_cols - 2, last_row),   # slot 27
+            (self.inv_cols - 3, last_row),   # slot 26
+        ]
+        occupied = sum(self._is_slot_occupied(c, r) for c, r in slots_to_check)
+        return occupied >= 2  # at least 2 of 3 must look full
 
     # ── Idle / tree-still-there checks ───────────────────────────
 
@@ -274,9 +286,24 @@ class SmartWoodcutter(RSBot):
         self.click(x, y, offset=3)
         self.wait(3, 1)
 
+    def is_bank_open(self):
+        """Heuristic: check if the deposit-all button area looks different from the game world."""
+        if not self.deposit_all_pos:
+            return True  # can't verify without a known button position
+        bx, by = self.deposit_all_pos
+        pad = 12
+        sample = self._grab_region((bx - pad, by - pad, bx + pad, by + pad))
+        # Bank UI tends to be a uniform grey/brown panel — low variance vs game world
+        return float(np.std(sample)) < 50
+
     def open_bank(self, booth_pos):
         self.click(*booth_pos, offset=3)
         self.wait(2, 0.5)
+        if not self.is_bank_open():
+            # Try one more time with a direct click (no offset)
+            print("[BOT] Bank may not have opened, clicking again...")
+            self.click(*booth_pos, offset=1)
+            self.wait(2, 0.5)
 
     def deposit_all(self):
         if self.deposit_all_pos:
@@ -306,6 +333,10 @@ class SmartWoodcutter(RSBot):
         current_tree = None
         scan_miss = 0  # consecutive scans with no tree on screen
         max_scan_miss = 5
+        bank_retries = 0       # consecutive failed deposit attempts
+        max_bank_retries = 3
+        walk_to_bank_attempts = 0
+        max_walk_to_bank = 10  # max minimap clicks before giving up
 
         print("[BOT] Smart Woodcutter started!")
         print("[BOT] Move mouse to top-left corner to emergency-stop.")
@@ -365,14 +396,23 @@ class SmartWoodcutter(RSBot):
                     if booth:
                         print("[BOT] Bank booth visible — opening...")
                         self.open_bank(booth)
+                        walk_to_bank_attempts = 0
+                        bank_retries = 0
                         state = self.BANKING
                     else:
+                        walk_to_bank_attempts += 1
+                        if walk_to_bank_attempts > max_walk_to_bank:
+                            print("[BOT] Can't find bank after many attempts — going back to chopping.")
+                            walk_to_bank_attempts = 0
+                            state = self.FIND_TREE
+                            continue
+
                         bank_mm = self.find_bank_on_minimap()
                         if bank_mm:
-                            print("[BOT] Bank on minimap, walking...")
+                            print(f"[BOT] Bank on minimap, walking... ({walk_to_bank_attempts}/{max_walk_to_bank})")
                             self.click_minimap(*bank_mm)
                         else:
-                            print("[BOT] Bank not on minimap, exploring...")
+                            print(f"[BOT] Bank not on minimap, exploring... ({walk_to_bank_attempts}/{max_walk_to_bank})")
                             self.click_minimap(*self._random_minimap_point())
 
                 # ── BANKING ──────────────────────────────────────
@@ -384,9 +424,17 @@ class SmartWoodcutter(RSBot):
                     if not self.is_inventory_full():
                         print("[BOT] Deposit done — heading back to trees.")
                         self.close_bank()
+                        bank_retries = 0
                         state = self.WALK_TO_TREES
                     else:
-                        print("[BOT] Deposit may have failed, retrying...")
+                        bank_retries += 1
+                        print(f"[BOT] Deposit may have failed (attempt {bank_retries}/{max_bank_retries})")
+                        if bank_retries >= max_bank_retries:
+                            print("[BOT] Too many deposit failures — closing and re-opening bank.")
+                            self.close_bank()
+                            self.wait(1, 0.3)
+                            bank_retries = 0
+                            state = self.WALK_TO_BANK
 
                 # ── WALK_TO_TREES ────────────────────────────────
                 elif state == self.WALK_TO_TREES:
