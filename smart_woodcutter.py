@@ -407,7 +407,22 @@ class SmartWoodcutter(RSBot):
 
                 # ── CHOPPING ─────────────────────────────────────
                 elif state == self.CHOPPING:
-                    self.wait(4, 1)  # typical chop animation time
+                    # Short pause then check if the player actually started
+                    # the chop animation (not idle).  If the click missed
+                    # (wrong target, menu opened, etc.) the player will be
+                    # standing still — go back to FIND_TREE immediately.
+                    self.wait(1.5, 0.3)
+
+                    if self.is_player_idle():
+                        # Click didn't start chopping — the target was
+                        # not a real tree or was unreachable.
+                        print("[BOT] Click missed — player never started chopping.")
+                        current_tree = None
+                        state = self.FIND_TREE
+                        continue
+
+                    # Player is animating — wait for the chop to finish
+                    self.wait(3, 0.8)
 
                     if current_tree and not self.is_tree_still_there(current_tree):
                         self.trees_chopped += 1
