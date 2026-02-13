@@ -1,3 +1,4 @@
+import os
 import pyautogui
 import time
 import json
@@ -18,7 +19,8 @@ def on_press(key):
             waypoints.append((x, y))
             print(f"Waypoint {len(waypoints)} saved at ({x}, {y})")
         elif key == keyboard.Key.f9:
-            with open("C:\\rsbot\\waypoints.json", "w") as f:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "waypoints.json")
+            with open(path, "w") as f:
                 json.dump(waypoints, f)
             print(f"Saved {len(waypoints)} waypoints to waypoints.json!")
             return False

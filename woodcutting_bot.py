@@ -7,7 +7,7 @@ from PIL import ImageGrab
 
 pyautogui.FAILSAFE = True
 
-TEMPLATE_PATH = "C:\\rsbot\\tree_template.png"
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tree_template.png")
 THRESHOLD = 0.6  # match confidence, lower = more lenient
 
 import pyautogui
@@ -16,12 +16,13 @@ import numpy as np
 import time
 import random
 import json
+import os
 from PIL import ImageGrab
 
 pyautogui.FAILSAFE = True
 
-TEMPLATE_PATH = "C:\\rsbot\\tree_template.png"
-WAYPOINTS_PATH = "C:\\rsbot\\waypoints.json"
+TEMPLATE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tree_template.png")
+WAYPOINTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "waypoints.json")
 THRESHOLD = 0.6
 WAYPOINT_WAIT = 3  # seconds to walk between waypoints
 
