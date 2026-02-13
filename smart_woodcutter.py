@@ -92,6 +92,9 @@ class SmartWoodcutter(RSBot):
         self.tree_color = tuple(colors["tree_trunk"])
         self.tree_tol = tol.get("tree_trunk", 30)
 
+        self.canopy_color = tuple(colors["tree_canopy"]) if "tree_canopy" in colors else None
+        self.canopy_tol = tol.get("tree_canopy", 35)
+
         self.mm_tree_color = tuple(colors["minimap_tree"])
         self.mm_tree_tol = tol.get("minimap_tree", 40)
 
@@ -160,13 +163,37 @@ class SmartWoodcutter(RSBot):
 
     # ── Screen-level detection ───────────────────────────────────
 
+    def _has_canopy_above(self, img, cx, cy, search_h=60):
+        """Check if there are leaf/canopy-colored pixels above a trunk cluster."""
+        if self.canopy_color is None:
+            return True  # no canopy color configured, skip check
+        # Look in a rectangle above the trunk center
+        top = max(0, cy - search_h)
+        left = max(0, cx - 30)
+        right = min(img.shape[1], cx + 30)
+        region = img[top:cy, left:right]
+        if region.size == 0:
+            return False
+        r, g, b = self.canopy_color
+        t = self.canopy_tol
+        mask = (
+            (np.abs(region[:, :, 0].astype(int) - r) < t)
+            & (np.abs(region[:, :, 1].astype(int) - g) < t)
+            & (np.abs(region[:, :, 2].astype(int) - b) < t)
+        )
+        return mask.sum() > 15  # need a handful of canopy pixels
+
     def find_trees_on_screen(self):
         """Return [(screen_x, screen_y), ...] for every tree visible."""
         img = np.array(self.screenshot())
         clusters = self._find_color_clusters(img, self.tree_color, self.tree_tol, min_area=30)
 
         ox, oy = (self.region[0], self.region[1]) if self.region else (0, 0)
-        return [(cx + ox, cy + oy) for cx, cy, _ in clusters]
+        trees = []
+        for cx, cy, _ in clusters:
+            if self._has_canopy_above(img, cx, cy):
+                trees.append((cx + ox, cy + oy))
+        return trees
 
     def find_nearest_tree(self):
         """Closest tree to the player character, or None."""

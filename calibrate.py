@@ -123,9 +123,13 @@ def calibrate():
     # ── 4. Colors ───────────────────────────────────────────────
     print("\n--- Color Calibration ---")
 
-    prompt("STEP 4 — TREE TRUNK\n"
-           "Hover over a tree trunk in the game world.")
+    prompt("STEP 4a — TREE TRUNK\n"
+           "Hover over a tree TRUNK (the brown/dark part) in the game world.")
     tree_col = sample_color()
+
+    prompt("STEP 4b — TREE CANOPY / LEAVES\n"
+           "Hover over the LEAVES / CANOPY (the green part) of a tree.")
+    canopy_col = sample_color()
 
     prompt("STEP 5 — MINIMAP TREE ICON\n"
            "Hover over a green tree area on the minimap.")
@@ -143,6 +147,7 @@ def calibrate():
 
     config["colors"] = {
         "tree_trunk": tree_col,
+        "tree_canopy": canopy_col,
         "minimap_tree": mm_tree_col,
         "minimap_bank": mm_bank_col,
         "bank_booth": bank_col,
@@ -150,6 +155,7 @@ def calibrate():
 
     config["tolerances"] = {
         "tree_trunk": 30,
+        "tree_canopy": 35,
         "minimap_tree": 40,
         "minimap_bank": 40,
         "bank_booth": 30,
